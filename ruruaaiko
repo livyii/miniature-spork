@@ -22,9 +22,9 @@ local GuiParent = get_gui_parent()
 -- ═══════════════════════════════════════════════════
 local FogConfig = {
     Enabled        = true,
-    Hue            = 0.10,       -- 0..1 (X axis on the square)
-    Saturation     = 0.65,       -- 0..1 (Always 1 on the square, controlled by slider)
-    Brightness     = 1.00,       -- 0..1 (Y axis on the square)
+    Hue            = 0.55,       -- Blue
+    Saturation     = 0.50,
+    Brightness     = 0.60,
     FogStart       = 0,
     FogEnd         = 280,
     Ambient        = true,
@@ -46,7 +46,7 @@ local Original = {
 
 -- // THEME //
 local Theme = {
-    Bg        = Color3.fromRGB(255, 250, 240),
+    Bg        = Color3.fromRGB(255, 248, 235),
     Surface   = Color3.fromRGB(255, 245, 220),
     Stroke    = Color3.fromRGB(220, 190, 150),
     Accent    = Color3.fromRGB(240, 180, 60),
@@ -116,19 +116,21 @@ local function apply_fog()
 end
 
 -- ═══════════════════════════════════════════════════
--- UI
+-- UI SETUP
 -- ═══════════════════════════════════════════════════
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "livyii_fog"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.DisplayOrder = 900
+ScreenGui.DisplayOrder = 999
 ScreenGui.IgnoreGuiInset = true
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Fixes layering issues
 ScreenGui.Parent = GuiParent
 
 local Main = Instance.new("Frame")
 Main.Name = "Main"
-Main.Size = UDim2.new(0, 300, 0, 480)
-Main.Position = UDim2.new(0.5, -150, 0.5, -240)
+-- Reduced height from 480 to 400 so it fits better
+Main.Size = UDim2.new(0, 280, 0, 400)
+Main.Position = UDim2.new(0.5, -140, 0.5, -200)
 Main.BackgroundColor3 = Theme.Bg
 Main.BorderSizePixel = 0
 Main.Active = true
@@ -223,11 +225,11 @@ end)
 
 -- SCROLL
 local Scroll = Instance.new("ScrollingFrame", Main)
-Scroll.Size = UDim2.new(1, -18, 1, -90)
+Scroll.Size = UDim2.new(1, -18, 1, -80)
 Scroll.Position = UDim2.new(0, 9, 0, 56)
 Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 800)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 700)
 Scroll.ScrollBarThickness = 3
 Scroll.ScrollBarImageColor3 = Theme.Accent
 
@@ -413,11 +415,11 @@ local function addSlider(label, min, max, getValue, setValue, decimals)
 end
 
 -- ═══════════════════════════════════════════════════
--- 2D COLOR PICKER (Matches the image exactly)
+-- 2D COLOR PICKER (Fixed Colors)
 -- ═══════════════════════════════════════════════════
 local function add2DColorPicker()
     local card = Instance.new("Frame", Scroll)
-    card.Size = UDim2.new(1, 0, 0, 134) -- Slightly taller to fit the square comfortably
+    card.Size = UDim2.new(1, 0, 0, 120) 
     card.BackgroundColor3 = Theme.Surface
     card.BackgroundTransparency = 0.05
     Instance.new("UICorner", card).CornerRadius = UDim.new(0, 11)
@@ -446,11 +448,12 @@ local function add2DColorPicker()
 
     -- The 2D Square Box
     local box = Instance.new("Frame", card)
-    box.Size = UDim2.new(1, -24, 0, 92)
+    box.Size = UDim2.new(1, -24, 0, 80)
     box.Position = UDim2.new(0, 12, 0, 28)
     box.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     box.BorderSizePixel = 0
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+    box.ClipsDescendants = true
 
     -- X axis: Rainbow Hue
     local hueGrad = Instance.new("UIGradient", box)
@@ -466,26 +469,29 @@ local function add2DColorPicker()
     hueGrad.Rotation = 0
 
     -- Y axis: Brightness (White to Transparent overlay)
-    local satGradFrame = Instance.new("Frame", box)
-    satGradFrame.Size = UDim2.new(1, 0, 1, 0)
-    satGradFrame.BackgroundColor3 = Color3.new(1, 1, 1)
-    satGradFrame.BackgroundTransparency = 0
-    satGradFrame.BorderSizePixel = 0
-    Instance.new("UICorner", satGradFrame).CornerRadius = UDim.new(0, 8)
+    -- We use BackgroundTransparency to let the colors shine through!
+    local whiteOverlay = Instance.new("Frame", box)
+    whiteOverlay.Size = UDim2.new(1, 0, 1, 0)
+    whiteOverlay.BackgroundColor3 = Color3.new(1, 1, 1)
+    whiteOverlay.BorderSizePixel = 0
 
-    local whiteGrad = Instance.new("UIGradient", satGradFrame)
+    local whiteGrad = Instance.new("UIGradient", whiteOverlay)
     whiteGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
         ColorSequenceKeypoint.new(1, Color3.new(0, 0, 0)),
     })
-    whiteGrad.Rotation = 90 -- Vertical fade
+    whiteGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),   -- Top is fully white
+        NumberSequenceKeypoint.new(1, 1),   -- Bottom is fully transparent (shows color)
+    })
+    whiteGrad.Rotation = 90
 
     -- The Knob (Selector)
     local knob = Instance.new("Frame", box)
     knob.Size = UDim2.new(0, 12, 0, 12)
     knob.BackgroundColor3 = Color3.new(1, 1, 1)
     knob.BorderSizePixel = 0
-    knob.ZIndex = 2
+    knob.ZIndex = 3
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
     local ks = Instance.new("UIStroke", knob)
     ks.Color = Color3.new(0, 0, 0)
@@ -589,11 +595,11 @@ minBtn.MouseButton1Click:Connect(function()
     minimized = not minimized
     if minimized then
         Scroll.Visible = false
-        Main.Size = UDim2.new(0, 300, 0, 48)
+        Main.Size = UDim2.new(0, 280, 0, 48)
         minBtn.Text = "+"
     else
         Scroll.Visible = true
-        Main.Size = UDim2.new(0, 300, 0, 480)
+        Main.Size = UDim2.new(0, 280, 0, 400)
         minBtn.Text = "−"
     end
 end)
