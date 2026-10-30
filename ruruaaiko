@@ -22,9 +22,9 @@ local GuiParent = get_gui_parent()
 -- ═══════════════════════════════════════════════════
 local FogConfig = {
     Enabled        = true,
-    Hue            = 0.55,       -- Blue
-    Saturation     = 0.50,
-    Brightness     = 0.60,
+    Hue            = 0.35,       
+    Saturation     = 1.00,       
+    Brightness     = 0.85,       
     FogStart       = 0,
     FogEnd         = 280,
     Ambient        = true,
@@ -123,12 +123,11 @@ ScreenGui.Name = "livyii_fog"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 999
 ScreenGui.IgnoreGuiInset = true
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Fixes layering issues
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = GuiParent
 
 local Main = Instance.new("Frame")
 Main.Name = "Main"
--- Reduced height from 480 to 400 so it fits better
 Main.Size = UDim2.new(0, 280, 0, 400)
 Main.Position = UDim2.new(0.5, -140, 0.5, -200)
 Main.BackgroundColor3 = Theme.Bg
@@ -415,7 +414,7 @@ local function addSlider(label, min, max, getValue, setValue, decimals)
 end
 
 -- ═══════════════════════════════════════════════════
--- 2D COLOR PICKER (Fixed Colors)
+-- 2D COLOR PICKER (Fixed to Rainbow X / White Y)
 -- ═══════════════════════════════════════════════════
 local function add2DColorPicker()
     local card = Instance.new("Frame", Scroll)
@@ -446,7 +445,7 @@ local function add2DColorPicker()
     ps.Color = Theme.Stroke
     ps.Thickness = 1.5
 
-    -- The 2D Square Box
+    -- The Box
     local box = Instance.new("Frame", card)
     box.Size = UDim2.new(1, -24, 0, 80)
     box.Position = UDim2.new(0, 12, 0, 28)
@@ -455,7 +454,7 @@ local function add2DColorPicker()
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
     box.ClipsDescendants = true
 
-    -- X axis: Rainbow Hue
+    -- 1. Bottom Layer: The Rainbow (X-Axis)
     local hueGrad = Instance.new("UIGradient", box)
     hueGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0.00, Color3.fromHSV(0.00, 1, 1)),
@@ -468,25 +467,26 @@ local function add2DColorPicker()
     })
     hueGrad.Rotation = 0
 
-    -- Y axis: Brightness (White to Transparent overlay)
-    -- We use BackgroundTransparency to let the colors shine through!
+    -- 2. Top Layer: White to Transparent (Y-Axis)
     local whiteOverlay = Instance.new("Frame", box)
     whiteOverlay.Size = UDim2.new(1, 0, 1, 0)
     whiteOverlay.BackgroundColor3 = Color3.new(1, 1, 1)
+    whiteOverlay.BackgroundTransparency = 0
     whiteOverlay.BorderSizePixel = 0
 
     local whiteGrad = Instance.new("UIGradient", whiteOverlay)
+    -- Color sequence: White to Black, but we use Transparency to make the bottom half transparent!
     whiteGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-        ColorSequenceKeypoint.new(1, Color3.new(0, 0, 0)),
+        ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
     })
     whiteGrad.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0),   -- Top is fully white
-        NumberSequenceKeypoint.new(1, 1),   -- Bottom is fully transparent (shows color)
+        NumberSequenceKeypoint.new(0, 0),   -- Top is solid White
+        NumberSequenceKeypoint.new(1, 1),   -- Bottom is completely Transparent (shows rainbow)
     })
-    whiteGrad.Rotation = 90
+    whiteGrad.Rotation = 90 -- Vertical fade
 
-    -- The Knob (Selector)
+    -- 3. The Knob
     local knob = Instance.new("Frame", box)
     knob.Size = UDim2.new(0, 12, 0, 12)
     knob.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -508,7 +508,6 @@ local function add2DColorPicker()
         update_knob_pos()
     end
 
-    -- Dragging logic
     local dragging = false
     local function set_from_input(xPos, yPos)
         local relativeX = math.clamp((xPos - box.AbsolutePosition.X) / box.AbsoluteSize.X, 0, 1)
