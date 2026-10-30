@@ -1,0 +1,612 @@
+-- 🍮 livyii . fog
+-- Standalone fog / lighting controller
+
+local Lighting = game:GetService("Lighting")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- // ROBUST GUI PARENTING //
+local function get_gui_parent()
+    local parent = nil
+    pcall(function() if gethui then parent = gethui() end end)
+    if not parent then pcall(function() parent = game:GetService("CoreGui") end) end
+    if not parent then parent = LocalPlayer:WaitForChild("PlayerGui", 5) end
+    return parent or LocalPlayer:WaitForChild("PlayerGui")
+end
+local GuiParent = get_gui_parent()
+
+-- ═══════════════════════════════════════════════════
+-- CONFIG TABLE
+-- ═══════════════════════════════════════════════════
+local FogConfig = {
+    Enabled        = true,
+    Hue            = 0.10,       -- 0..1 (X axis on the square)
+    Saturation     = 0.65,       -- 0..1 (Always 1 on the square, controlled by slider)
+    Brightness     = 1.00,       -- 0..1 (Y axis on the square)
+    FogStart       = 0,
+    FogEnd         = 280,
+    Ambient        = true,
+    OutdoorAmbient = true,
+    BrightnessGate = true,
+    BrightnessValue= 2,
+    MenuKey        = Enum.KeyCode.F,
+    ToggleKey      = Enum.KeyCode.G,
+}
+
+local Original = {
+    FogColor       = Lighting.FogColor,
+    FogStart       = Lighting.FogStart,
+    FogEnd         = Lighting.FogEnd,
+    Ambient        = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    Brightness     = Lighting.Brightness,
+}
+
+-- // THEME //
+local Theme = {
+    Bg        = Color3.fromRGB(255, 250, 240),
+    Surface   = Color3.fromRGB(255, 245, 220),
+    Stroke    = Color3.fromRGB(220, 190, 150),
+    Accent    = Color3.fromRGB(240, 180, 60),
+    TextMain  = Color3.fromRGB(100, 70, 40),
+    TextMuted = Color3.fromRGB(160, 130, 100),
+    Grad1     = Color3.fromRGB(255, 245, 220),
+    Grad2     = Color3.fromRGB(255, 255, 255),
+    Emoji     = "🍮"
+}
+
+local FontConfig = {
+    Title = Enum.Font.GothamBlack,
+    Body  = Enum.Font.GothamMedium,
+    Bold  = Enum.Font.GothamBold
+}
+
+local TweenConfig = {
+    Fast   = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    Smooth = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Bouncy = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+}
+
+-- ═══════════════════════════════════════════════════
+-- APPLY FOG
+-- ═══════════════════════════════════════════════════
+local function current_color()
+    return Color3.fromHSV(
+        math.clamp(FogConfig.Hue, 0, 1),
+        math.clamp(FogConfig.Saturation, 0, 1),
+        math.clamp(FogConfig.Brightness, 0, 1)
+    )
+end
+
+local function apply_fog()
+    if not FogConfig.Enabled then
+        Lighting.FogColor       = Original.FogColor
+        Lighting.FogStart       = Original.FogStart
+        Lighting.FogEnd         = Original.FogEnd
+        Lighting.Ambient        = Original.Ambient
+        Lighting.OutdoorAmbient = Original.OutdoorAmbient
+        Lighting.Brightness     = Original.Brightness
+        return
+    end
+
+    local col = current_color()
+    Lighting.FogColor = col
+    Lighting.FogStart = FogConfig.FogStart
+    Lighting.FogEnd   = FogConfig.FogEnd
+
+    if FogConfig.Ambient then
+        Lighting.Ambient = col:Lerp(Color3.new(1, 1, 1), 0.35)
+    else
+        Lighting.Ambient = Original.Ambient
+    end
+
+    if FogConfig.OutdoorAmbient then
+        Lighting.OutdoorAmbient = col
+    else
+        Lighting.OutdoorAmbient = Original.OutdoorAmbient
+    end
+
+    if FogConfig.BrightnessGate then
+        Lighting.Brightness = FogConfig.BrightnessValue
+    else
+        Lighting.Brightness = Original.Brightness
+    end
+end
+
+-- ═══════════════════════════════════════════════════
+-- UI
+-- ═══════════════════════════════════════════════════
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "livyii_fog"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 900
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = GuiParent
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.new(0, 300, 0, 480)
+Main.Position = UDim2.new(0.5, -150, 0.5, -240)
+Main.BackgroundColor3 = Theme.Bg
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.ClipsDescendants = true
+Main.Parent = ScreenGui
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 18)
+local mainStroke = Instance.new("UIStroke", Main)
+mainStroke.Color = Theme.Stroke
+mainStroke.Thickness = 1.8
+
+local mainGrad = Instance.new("UIGradient", Main)
+mainGrad.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Theme.Grad1), ColorSequenceKeypoint.new(1, Theme.Grad2) })
+mainGrad.Rotation = 45
+
+-- HEADER
+local header = Instance.new("Frame", Main)
+header.Size = UDim2.new(1, 0, 0, 48)
+header.BackgroundTransparency = 1
+
+local badge = Instance.new("Frame", header)
+badge.Size = UDim2.new(0, 28, 0, 28)
+badge.Position = UDim2.new(0, 10, 0.5, -14)
+badge.BackgroundColor3 = Theme.Accent
+Instance.new("UICorner", badge).CornerRadius = UDim.new(1, 0)
+local badgeStroke = Instance.new("UIStroke", badge)
+badgeStroke.Color = Theme.Stroke
+badgeStroke.Thickness = 1.5
+
+local badgeIcon = Instance.new("TextLabel", badge)
+badgeIcon.Size = UDim2.new(1, 0, 1, 0)
+badgeIcon.BackgroundTransparency = 1
+badgeIcon.Text = Theme.Emoji
+badgeIcon.TextSize = 14
+badgeIcon.Font = FontConfig.Bold
+
+local titleLbl = Instance.new("TextLabel", header)
+titleLbl.Size = UDim2.new(1, -50, 0, 16)
+titleLbl.Position = UDim2.new(0, 44, 0, 9)
+titleLbl.BackgroundTransparency = 1
+titleLbl.Text = "🍮 livyii . fog"
+titleLbl.TextColor3 = Theme.TextMain
+titleLbl.TextSize = 13
+titleLbl.Font = FontConfig.Bold
+titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local subLbl = Instance.new("TextLabel", header)
+subLbl.Size = UDim2.new(1, -50, 0, 12)
+subLbl.Position = UDim2.new(0, 44, 0, 26)
+subLbl.BackgroundTransparency = 1
+subLbl.Text = "fog + lighting controller"
+subLbl.TextColor3 = Theme.TextMuted
+subLbl.TextSize = 9
+subLbl.Font = FontConfig.Body
+subLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local minBtn = Instance.new("TextButton", header)
+minBtn.Size = UDim2.new(0, 22, 0, 22)
+minBtn.Position = UDim2.new(1, -28, 0.5, -11)
+minBtn.BackgroundColor3 = Theme.Accent
+minBtn.Text = "−"
+minBtn.TextColor3 = Theme.Bg
+minBtn.TextSize = 13
+minBtn.Font = FontConfig.Bold
+minBtn.AutoButtonColor = false
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(1, 0)
+local minStroke = Instance.new("UIStroke", minBtn)
+minStroke.Color = Theme.Stroke
+minStroke.Thickness = 1.3
+
+-- DRAG
+local dragging = false
+local dragStart, startPos
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+    end
+end)
+header.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- SCROLL
+local Scroll = Instance.new("ScrollingFrame", Main)
+Scroll.Size = UDim2.new(1, -18, 1, -90)
+Scroll.Position = UDim2.new(0, 9, 0, 56)
+Scroll.BackgroundTransparency = 1
+Scroll.BorderSizePixel = 0
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 800)
+Scroll.ScrollBarThickness = 3
+Scroll.ScrollBarImageColor3 = Theme.Accent
+
+local list = Instance.new("UIListLayout", Scroll)
+list.Padding = UDim.new(0, 6)
+list.SortOrder = Enum.SortOrder.LayoutOrder
+
+-- ═══════════════════════════════════════════════════
+-- COMPONENTS
+-- ═══════════════════════════════════════════════════
+local function addSection(text)
+    local sec = Instance.new("Frame", Scroll)
+    sec.Size = UDim2.new(1, 0, 0, 22)
+    sec.BackgroundTransparency = 1
+
+    local lbl = Instance.new("TextLabel", sec)
+    lbl.Size = UDim2.new(1, -24, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "♡˚ " .. text .. " ˚♡"
+    lbl.TextColor3 = Theme.TextMain
+    lbl.TextSize = 11
+    lbl.Font = FontConfig.Bold
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local line = Instance.new("Frame", sec)
+    line.Size = UDim2.new(1, 0, 0, 1)
+    line.Position = UDim2.new(0, 0, 1, -1)
+    line.BackgroundColor3 = Theme.TextMuted
+    line.BackgroundTransparency = 0.5
+    line.BorderSizePixel = 0
+end
+
+local function addToggle(label, getState, setState)
+    local card = Instance.new("Frame", Scroll)
+    card.Size = UDim2.new(1, 0, 0, 36)
+    card.BackgroundColor3 = Theme.Surface
+    card.BackgroundTransparency = 0.05
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 11)
+    local cs = Instance.new("UIStroke", card)
+    cs.Color = Theme.Stroke
+    cs.Thickness = 1
+
+    local lbl = Instance.new("TextLabel", card)
+    lbl.Size = UDim2.new(1, -90, 1, 0)
+    lbl.Position = UDim2.new(0, 12, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = label
+    lbl.TextColor3 = Theme.TextMain
+    lbl.TextSize = 11
+    lbl.Font = FontConfig.Body
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local pill = Instance.new("TextButton", card)
+    pill.Size = UDim2.new(0, 38, 0, 20)
+    pill.Position = UDim2.new(1, -46, 0.5, -10)
+    pill.BackgroundColor3 = getState() and Theme.Accent or Theme.Bg
+    pill.Text = ""
+    pill.AutoButtonColor = false
+    Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
+    local ps = Instance.new("UIStroke", pill)
+    ps.Color = getState() and Theme.Stroke or Theme.TextMuted
+    ps.Thickness = 1.3
+
+    local knob = Instance.new("Frame", pill)
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = getState() and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local ks = Instance.new("UIStroke", knob)
+    ks.Color = Theme.Stroke
+    ks.Thickness = 1
+
+    local function apply(state)
+        TweenService:Create(pill, TweenConfig.Fast, { BackgroundColor3 = state and Theme.Accent or Theme.Bg }):Play()
+        TweenService:Create(ps, TweenConfig.Fast, { Color = state and Theme.Stroke or Theme.TextMuted }):Play()
+        TweenService:Create(knob, TweenConfig.Bouncy, {
+            Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+        }):Play()
+    end
+
+    pill.MouseButton1Click:Connect(function()
+        local ns = not getState()
+        setState(ns)
+        apply(ns)
+    end)
+end
+
+local function addSlider(label, min, max, getValue, setValue, decimals)
+    decimals = decimals or 2
+    local card = Instance.new("Frame", Scroll)
+    card.Size = UDim2.new(1, 0, 0, 44)
+    card.BackgroundColor3 = Theme.Surface
+    card.BackgroundTransparency = 0.05
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 11)
+    local cs = Instance.new("UIStroke", card)
+    cs.Color = Theme.Stroke
+    cs.Thickness = 1
+
+    local lbl = Instance.new("TextLabel", card)
+    lbl.Size = UDim2.new(1, -70, 0, 16)
+    lbl.Position = UDim2.new(0, 12, 0, 6)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = label
+    lbl.TextColor3 = Theme.TextMain
+    lbl.TextSize = 11
+    lbl.Font = FontConfig.Body
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local badge = Instance.new("Frame", card)
+    badge.Size = UDim2.new(0, 46, 0, 18)
+    badge.Position = UDim2.new(1, -58, 0, 6)
+    badge.BackgroundColor3 = Theme.Accent
+    Instance.new("UICorner", badge).CornerRadius = UDim.new(1, 0)
+    local bs = Instance.new("UIStroke", badge)
+    bs.Color = Theme.Stroke
+    bs.Thickness = 1
+
+    local valLbl = Instance.new("TextLabel", badge)
+    valLbl.Size = UDim2.new(1, 0, 1, 0)
+    valLbl.BackgroundTransparency = 1
+    valLbl.Text = string.format("%." .. decimals .. "f", getValue())
+    valLbl.TextColor3 = Theme.Bg
+    valLbl.TextSize = 9
+    valLbl.Font = FontConfig.Bold
+
+    local track = Instance.new("Frame", card)
+    track.Size = UDim2.new(1, -24, 0, 5)
+    track.Position = UDim2.new(0, 12, 0, 30)
+    track.BackgroundColor3 = Theme.Bg
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame", track)
+    local pct = math.clamp((getValue() - min) / (max - min), 0, 1)
+    fill.Size = UDim2.new(pct, 0, 1, 0)
+    fill.BackgroundColor3 = Theme.Accent
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("TextButton", track)
+    knob.Size = UDim2.new(0, 13, 0, 13)
+    knob.Position = UDim2.new(pct, -6, 0.5, -6)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.Text = ""
+    knob.AutoButtonColor = false
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local ks = Instance.new("UIStroke", knob)
+    ks.Color = Theme.Stroke
+    ks.Thickness = 1.5
+
+    local isDragging = false
+    local function update(xPos)
+        local p = math.clamp((xPos - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        local raw = min + (max - min) * p
+        local val
+        if decimals == 0 then
+            val = math.floor(raw + 0.5)
+        else
+            local m = 10 ^ decimals
+            val = math.floor(raw * m + 0.5) / m
+        end
+        setValue(val)
+        valLbl.Text = string.format("%." .. decimals .. "f", val)
+        fill.Size = UDim2.new(p, 0, 1, 0)
+        knob.Position = UDim2.new(p, -6, 0.5, -6)
+    end
+
+    knob.MouseButton1Down:Connect(function() isDragging = true end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = false
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input.Position.X)
+        end
+    end)
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+            update(input.Position.X)
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════
+-- 2D COLOR PICKER (Matches the image exactly)
+-- ═══════════════════════════════════════════════════
+local function add2DColorPicker()
+    local card = Instance.new("Frame", Scroll)
+    card.Size = UDim2.new(1, 0, 0, 134) -- Slightly taller to fit the square comfortably
+    card.BackgroundColor3 = Theme.Surface
+    card.BackgroundTransparency = 0.05
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 11)
+    local cs = Instance.new("UIStroke", card)
+    cs.Color = Theme.Stroke
+    cs.Thickness = 1
+
+    local lbl = Instance.new("TextLabel", card)
+    lbl.Size = UDim2.new(1, -80, 0, 16)
+    lbl.Position = UDim2.new(0, 12, 0, 6)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "color"
+    lbl.TextColor3 = Theme.TextMain
+    lbl.TextSize = 11
+    lbl.Font = FontConfig.Bold
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local preview = Instance.new("Frame", card)
+    preview.Size = UDim2.new(0, 46, 0, 20)
+    preview.Position = UDim2.new(1, -58, 0, 5)
+    preview.BackgroundColor3 = current_color()
+    Instance.new("UICorner", preview).CornerRadius = UDim.new(0, 6)
+    local ps = Instance.new("UIStroke", preview)
+    ps.Color = Theme.Stroke
+    ps.Thickness = 1.5
+
+    -- The 2D Square Box
+    local box = Instance.new("Frame", card)
+    box.Size = UDim2.new(1, -24, 0, 92)
+    box.Position = UDim2.new(0, 12, 0, 28)
+    box.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    box.BorderSizePixel = 0
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+
+    -- X axis: Rainbow Hue
+    local hueGrad = Instance.new("UIGradient", box)
+    hueGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromHSV(0.00, 1, 1)),
+        ColorSequenceKeypoint.new(0.17, Color3.fromHSV(0.17, 1, 1)),
+        ColorSequenceKeypoint.new(0.33, Color3.fromHSV(0.33, 1, 1)),
+        ColorSequenceKeypoint.new(0.50, Color3.fromHSV(0.50, 1, 1)),
+        ColorSequenceKeypoint.new(0.67, Color3.fromHSV(0.67, 1, 1)),
+        ColorSequenceKeypoint.new(0.83, Color3.fromHSV(0.83, 1, 1)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromHSV(1.00, 1, 1)),
+    })
+    hueGrad.Rotation = 0
+
+    -- Y axis: Brightness (White to Transparent overlay)
+    local satGradFrame = Instance.new("Frame", box)
+    satGradFrame.Size = UDim2.new(1, 0, 1, 0)
+    satGradFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+    satGradFrame.BackgroundTransparency = 0
+    satGradFrame.BorderSizePixel = 0
+    Instance.new("UICorner", satGradFrame).CornerRadius = UDim.new(0, 8)
+
+    local whiteGrad = Instance.new("UIGradient", satGradFrame)
+    whiteGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(1, Color3.new(0, 0, 0)),
+    })
+    whiteGrad.Rotation = 90 -- Vertical fade
+
+    -- The Knob (Selector)
+    local knob = Instance.new("Frame", box)
+    knob.Size = UDim2.new(0, 12, 0, 12)
+    knob.BackgroundColor3 = Color3.new(1, 1, 1)
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 2
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local ks = Instance.new("UIStroke", knob)
+    ks.Color = Color3.new(0, 0, 0)
+    ks.Thickness = 1.5
+
+    local function update_knob_pos()
+        local xPct = FogConfig.Hue
+        local yPct = 1 - FogConfig.Brightness
+        knob.Position = UDim2.new(xPct, -6, yPct, -6)
+    end
+
+    local function refresh_ui()
+        preview.BackgroundColor3 = current_color()
+        update_knob_pos()
+    end
+
+    -- Dragging logic
+    local dragging = false
+    local function set_from_input(xPos, yPos)
+        local relativeX = math.clamp((xPos - box.AbsolutePosition.X) / box.AbsoluteSize.X, 0, 1)
+        local relativeY = math.clamp((yPos - box.AbsolutePosition.Y) / box.AbsoluteSize.Y, 0, 1)
+        
+        FogConfig.Hue = relativeX
+        FogConfig.Brightness = 1 - relativeY
+        
+        refresh_ui()
+        apply_fog()
+    end
+
+    box.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            set_from_input(input.Position.X, input.Position.Y)
+        end
+    end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            set_from_input(input.Position.X, input.Position.Y)
+        end
+    end)
+
+    refresh_ui()
+end
+
+-- ═══════════════════════════════════════════════════
+-- POPULATE
+-- ═══════════════════════════════════════════════════
+
+addSection("master")
+addToggle("enable fog", function() return FogConfig.Enabled end, function(v)
+    FogConfig.Enabled = v
+    apply_fog()
+end)
+
+addSection("color (box)")
+add2DColorPicker()
+
+addSlider("saturation", 0, 1, function() return FogConfig.Saturation end, function(v)
+    FogConfig.Saturation = v
+    apply_fog()
+end, 2)
+
+addSection("fog range")
+addSlider("fog start", 0, 500, function() return FogConfig.FogStart end, function(v)
+    FogConfig.FogStart = v
+    apply_fog()
+end, 0)
+addSlider("fog end", 50, 1000, function() return FogConfig.FogEnd end, function(v)
+    FogConfig.FogEnd = v
+    apply_fog()
+end, 0)
+
+addSection("lighting")
+addToggle("blend ambient", function() return FogConfig.Ambient end, function(v)
+    FogConfig.Ambient = v
+    apply_fog()
+end)
+addToggle("set outdoor ambient", function() return FogConfig.OutdoorAmbient end, function(v)
+    FogConfig.OutdoorAmbient = v
+    apply_fog()
+end)
+addToggle("override brightness", function() return FogConfig.BrightnessGate end, function(v)
+    FogConfig.BrightnessGate = v
+    apply_fog()
+end)
+addSlider("brightness value", 0, 5, function() return FogConfig.BrightnessValue end, function(v)
+    FogConfig.BrightnessValue = v
+    apply_fog()
+end, 1)
+
+-- ═══════════════════════════════════════════════════
+-- MINIMIZE & KEYBINDS
+-- ═══════════════════════════════════════════════════
+local minimized = false
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        Scroll.Visible = false
+        Main.Size = UDim2.new(0, 300, 0, 48)
+        minBtn.Text = "+"
+    else
+        Scroll.Visible = true
+        Main.Size = UDim2.new(0, 300, 0, 480)
+        minBtn.Text = "−"
+    end
+end)
+
+UIS.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == FogConfig.MenuKey then
+        ScreenGui.Enabled = not ScreenGui.Enabled
+    elseif input.KeyCode == FogConfig.ToggleKey then
+        FogConfig.Enabled = not FogConfig.Enabled
+        apply_fog()
+    end
+end)
+
+apply_fog()
+print("🍮 livyii . fog loaded")
