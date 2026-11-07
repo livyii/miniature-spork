@@ -1,5 +1,5 @@
 -- 🍮 livyii . fog
--- Standalone fog / lighting controller + Character Glow
+-- Standalone fog / lighting controller + Frost Outline Glow
 
 local Lighting = game:GetService("Lighting")
 local UIS = game:GetService("UserInputService")
@@ -35,11 +35,10 @@ local FogConfig = {
     MenuKey        = Enum.KeyCode.F,
     ToggleKey      = Enum.KeyCode.G,
     
-    -- Glow Settings
-    GlowCharacter  = true,
+    -- Frost Outline Settings
+    GlowCharacter  = true,       
     GlowColor      = Color3.fromRGB(255, 255, 255),
-    GlowBrightness = 3,          -- How bright the light is
-    GlowRange      = 20          -- How far the light reaches
+    GlowThickness  = 3           -- How thick the outline is
 }
 
 local Original = {
@@ -71,37 +70,38 @@ local FontConfig = {
 }
 
 -- ═══════════════════════════════════════════════════
--- CHARACTER GLOW LOGIC (FIXED)
+-- CHARACTER FROST OUTLINE LOGIC
 -- ═══════════════════════════════════════════════════
-local glowLight = nil
+local frostOutline = nil
 
 local function update_character_glow()
     local char = LocalPlayer.Character
     if not char then return end
 
     if FogConfig.Enabled and FogConfig.GlowCharacter then
-        local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
-        if torso then
-            if not glowLight or glowLight.Parent ~= torso then
-                if glowLight then glowLight:Destroy() end
-                glowLight = Instance.new("PointLight")
-                glowLight.Name = "FogGlow"
-                glowLight.Color = FogConfig.GlowColor
-                glowLight.Brightness = FogConfig.GlowBrightness
-                glowLight.Range = FogConfig.GlowRange
-                glowLight.Shadows = false
-                glowLight.Parent = torso
-            else
-                glowLight.Enabled = true
-                glowLight.Color = FogConfig.GlowColor
-                glowLight.Brightness = FogConfig.GlowBrightness
-                glowLight.Range = FogConfig.GlowRange
-            end
+        if not frostOutline or frostOutline.Parent ~= char then
+            if frostOutline then frostOutline:Destroy() end
+            frostOutline = Instance.new("Highlight")
+            frostOutline.Name = "FogFrostOutline"
+            frostOutline.Adornee = char
+            frostOutline.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            frostOutline.Parent = char
         end
+        
+        -- Key settings for the "outline only" look:
+        frostOutline.Enabled = true
+        frostOutline.FillTransparency = 1     -- Completely hide the fill
+        frostOutline.OutlineTransparency = 0  -- Solid outline
+        frostOutline.OutlineColor = FogConfig.GlowColor
+        
+        -- If the executor supports OutlineThickness natively (some do), try to set it
+        pcall(function()
+            frostOutline.OutlineThickness = FogConfig.GlowThickness
+        end)
     else
-        if glowLight then
-            glowLight:Destroy()
-            glowLight = nil
+        if frostOutline then
+            frostOutline:Destroy()
+            frostOutline = nil
         end
     end
 end
@@ -173,8 +173,8 @@ ScreenGui.Parent = GuiParent
 
 local Main = Instance.new("Frame")
 Main.Name = "Main"
-Main.Size = UDim2.new(0, 280, 0, 470)
-Main.Position = UDim2.new(0.5, -140, 0.5, -235)
+Main.Size = UDim2.new(0, 280, 0, 440)
+Main.Position = UDim2.new(0.5, -140, 0.5, -220)
 Main.BackgroundColor3 = Theme.Bg
 Main.BorderSizePixel = 0
 Main.Active = true
@@ -588,18 +588,14 @@ addToggle("enable fog", function() return FogConfig.Enabled end, function(v)
     apply_fog()
 end)
 
-addSection("character")
-addToggle("glow character", function() return FogConfig.GlowCharacter end, function(v)
+addSection("character outline")
+addToggle("frost outline", function() return FogConfig.GlowCharacter end, function(v)
     FogConfig.GlowCharacter = v
     apply_fog()
 end)
-addSlider("glow brightness", 1, 10, function() return FogConfig.GlowBrightness end, function(v)
-    FogConfig.GlowBrightness = v
-    apply_fog()
-end, 0)
-addSlider("glow range", 5, 60, function() return FogConfig.GlowRange end, function(v)
-    FogConfig.GlowRange = v
-    apply_fog()
+addSlider("outline thickness", 1, 10, function() return FogConfig.GlowThickness end, function(v)
+    FogConfig.GlowThickness = v
+    update_character_glow()
 end, 0)
 
 addSection("color (box)")
@@ -650,7 +646,7 @@ minBtn.MouseButton1Click:Connect(function()
         minBtn.Text = "+"
     else
         Scroll.Visible = true
-        Main.Size = UDim2.new(0, 280, 0, 470)
+        Main.Size = UDim2.new(0, 280, 0, 440)
         minBtn.Text = "−"
     end
 end)
@@ -668,16 +664,12 @@ end)
 -- Initial call
 apply_fog()
 
--- Keep glow updated in case character loads after script runs
 task.spawn(function()
     while task.wait(1) do
         if FogConfig.Enabled and FogConfig.GlowCharacter then
             local char = LocalPlayer.Character
-            if char then
-                local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
-                if torso and (not glowLight or glowLight.Parent ~= torso) then
-                    update_character_glow()
-                end
+            if char and (not frostOutline or frostOutline.Parent ~= char) then
+                update_character_glow()
             end
         end
     end
