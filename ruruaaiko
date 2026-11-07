@@ -1,5 +1,5 @@
 -- 🍮 livyii . fog
--- Standalone fog / lighting controller + Frost Outline Glow
+-- Standalone fog / lighting controller + Smooth Frost Aura
 
 local Lighting = game:GetService("Lighting")
 local UIS = game:GetService("UserInputService")
@@ -37,8 +37,8 @@ local FogConfig = {
     
     -- Frost Outline Settings
     GlowCharacter  = true,       
-    GlowColor      = Color3.fromRGB(255, 255, 255),
-    GlowThickness  = 3           -- How thick the outline is
+    GlowColor      = Color3.fromRGB(200, 240, 255), -- Frosty blue/white
+    GlowThickness  = 0.05 -- SelectionBox thickness works differently
 }
 
 local Original = {
@@ -70,39 +70,81 @@ local FontConfig = {
 }
 
 -- ═══════════════════════════════════════════════════
--- CHARACTER FROST OUTLINE LOGIC
+-- CHARACTER FROST AURA LOGIC
 -- ═══════════════════════════════════════════════════
-local frostOutline = nil
+local frostHighlight = nil
+local frostBox = nil
+local frostLight = nil
+local frostParticles = nil
 
 local function update_character_glow()
     local char = LocalPlayer.Character
     if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
 
     if FogConfig.Enabled and FogConfig.GlowCharacter then
-        if not frostOutline or frostOutline.Parent ~= char then
-            if frostOutline then frostOutline:Destroy() end
-            frostOutline = Instance.new("Highlight")
-            frostOutline.Name = "FogFrostOutline"
-            frostOutline.Adornee = char
-            frostOutline.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            frostOutline.Parent = char
+        -- 1. Smooth Outline (SelectionBox is anti-aliased, unlike Highlight)
+        if not frostBox or frostBox.Parent ~= char then
+            if frostBox then frostBox:Destroy() end
+            frostBox = Instance.new("SelectionBox")
+            frostBox.Name = "FogFrostBox"
+            frostBox.Adornee = char
+            frostBox.LineThickness = FogConfig.GlowThickness
+            frostBox.Color3 = FogConfig.GlowColor
+            frostBox.SurfaceTransparency = 1 -- Hide the box faces
+            frostBox.Parent = char
+        end
+        frostBox.LineThickness = FogConfig.GlowThickness
+        frostBox.Color3 = FogConfig.GlowColor
+
+        -- 2. Local Light to cut through the fog around you
+        if not frostLight or frostLight.Parent ~= hrp then
+            if frostLight then frostLight:Destroy() end
+            frostLight = Instance.new("PointLight")
+            frostLight.Name = "FogLight"
+            frostLight.Color = FogConfig.GlowColor
+            frostLight.Brightness = 2
+            frostLight.Range = 15
+            frostLight.Shadows = false
+            frostLight.Parent = hrp
         end
         
-        -- Key settings for the "outline only" look:
-        frostOutline.Enabled = true
-        frostOutline.FillTransparency = 1     -- Completely hide the fill
-        frostOutline.OutlineTransparency = 0  -- Solid outline
-        frostOutline.OutlineColor = FogConfig.GlowColor
-        
-        -- If the executor supports OutlineThickness natively (some do), try to set it
-        pcall(function()
-            frostOutline.OutlineThickness = FogConfig.GlowThickness
-        end)
+        -- 3. Frosty Particles to make the outline look magical and hide pixelation
+        if not frostParticles or frostParticles.Parent ~= hrp then
+            if frostParticles then frostParticles:Destroy() end
+            frostParticles = Instance.new("ParticleEmitter")
+            frostParticles.Name = "FogFrost"
+            frostParticles.Texture = "rbxassetid://243660364" -- Sparkle
+            frostParticles.Color = ColorSequence.new(FogConfig.GlowColor)
+            frostParticles.Size = NumberSequence.new(0.1, 0.5)
+            frostParticles.Transparency = NumberSequence.new(0.5, 1)
+            frostParticles.Lifetime = NumberRange.new(0.5, 1)
+            frostParticles.Rate = 20
+            frostParticles.Speed = NumberRange.new(1, 2)
+            frostParticles.SpreadAngle = Vector2.new(180, 180)
+            frostParticles.Parent = hrp
+        end
+
+        -- 4. A subtle Highlight to catch the fill (optional but helps with the aura)
+        if not frostHighlight or frostHighlight.Parent ~= char then
+            if frostHighlight then frostHighlight:Destroy() end
+            frostHighlight = Instance.new("Highlight")
+            frostHighlight.Name = "FogFrostFill"
+            frostHighlight.Adornee = char
+            frostHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            frostHighlight.Parent = char
+        end
+        frostHighlight.FillColor = FogConfig.GlowColor
+        frostHighlight.FillTransparency = 0.85 -- Very faint fill
+        frostHighlight.OutlineTransparency = 1  -- Hide the pixelated outline
+
     else
-        if frostOutline then
-            frostOutline:Destroy()
-            frostOutline = nil
-        end
+        if frostBox then frostBox:Destroy(); frostBox = nil end
+        if frostLight then frostLight:Destroy(); frostLight = nil end
+        if frostParticles then frostParticles:Destroy(); frostParticles = nil end
+        if frostHighlight then frostHighlight:Destroy(); frostHighlight = nil end
     end
 end
 
@@ -588,15 +630,15 @@ addToggle("enable fog", function() return FogConfig.Enabled end, function(v)
     apply_fog()
 end)
 
-addSection("character outline")
+addSection("character aura")
 addToggle("frost outline", function() return FogConfig.GlowCharacter end, function(v)
     FogConfig.GlowCharacter = v
     apply_fog()
 end)
-addSlider("outline thickness", 1, 10, function() return FogConfig.GlowThickness end, function(v)
+addSlider("outline thickness", 0.01, 0.1, function() return FogConfig.GlowThickness end, function(v)
     FogConfig.GlowThickness = v
     update_character_glow()
-end, 0)
+end, 2)
 
 addSection("color (box)")
 add2DColorPicker()
@@ -664,11 +706,12 @@ end)
 -- Initial call
 apply_fog()
 
+-- Keep aura updated
 task.spawn(function()
     while task.wait(1) do
         if FogConfig.Enabled and FogConfig.GlowCharacter then
             local char = LocalPlayer.Character
-            if char and (not frostOutline or frostOutline.Parent ~= char) then
+            if char and (not frostBox or frostBox.Parent ~= char) then
                 update_character_glow()
             end
         end
