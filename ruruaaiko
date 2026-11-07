@@ -35,9 +35,11 @@ local FogConfig = {
     MenuKey        = Enum.KeyCode.F,
     ToggleKey      = Enum.KeyCode.G,
     
-    -- New Glow Settings
-    GlowCharacter  = true,       -- Make your character glow so they stand out in the fog
-    GlowColor      = Color3.fromRGB(255, 255, 255) -- The color of the glow
+    -- Glow Settings
+    GlowCharacter  = true,
+    GlowColor      = Color3.fromRGB(255, 255, 255),
+    GlowBrightness = 3,          -- How bright the light is
+    GlowRange      = 20          -- How far the light reaches
 }
 
 local Original = {
@@ -69,33 +71,37 @@ local FontConfig = {
 }
 
 -- ═══════════════════════════════════════════════════
--- CHARACTER GLOW LOGIC
+-- CHARACTER GLOW LOGIC (FIXED)
 -- ═══════════════════════════════════════════════════
-local characterHighlight = nil
+local glowLight = nil
 
 local function update_character_glow()
     local char = LocalPlayer.Character
     if not char then return end
 
     if FogConfig.Enabled and FogConfig.GlowCharacter then
-        if not characterHighlight or characterHighlight.Parent ~= char then
-            if characterHighlight then characterHighlight:Destroy() end
-            characterHighlight = Instance.new("Highlight")
-            characterHighlight.Name = "FogGlowHighlight"
-            characterHighlight.Adornee = char
-            characterHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            characterHighlight.FillTransparency = 0.5
-            characterHighlight.OutlineTransparency = 1
-            characterHighlight.FillColor = FogConfig.GlowColor
-            characterHighlight.Parent = char
-        else
-            characterHighlight.Enabled = true
-            characterHighlight.FillColor = FogConfig.GlowColor
+        local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
+        if torso then
+            if not glowLight or glowLight.Parent ~= torso then
+                if glowLight then glowLight:Destroy() end
+                glowLight = Instance.new("PointLight")
+                glowLight.Name = "FogGlow"
+                glowLight.Color = FogConfig.GlowColor
+                glowLight.Brightness = FogConfig.GlowBrightness
+                glowLight.Range = FogConfig.GlowRange
+                glowLight.Shadows = false
+                glowLight.Parent = torso
+            else
+                glowLight.Enabled = true
+                glowLight.Color = FogConfig.GlowColor
+                glowLight.Brightness = FogConfig.GlowBrightness
+                glowLight.Range = FogConfig.GlowRange
+            end
         end
     else
-        if characterHighlight then
-            characterHighlight:Destroy()
-            characterHighlight = nil
+        if glowLight then
+            glowLight:Destroy()
+            glowLight = nil
         end
     end
 end
@@ -167,8 +173,8 @@ ScreenGui.Parent = GuiParent
 
 local Main = Instance.new("Frame")
 Main.Name = "Main"
-Main.Size = UDim2.new(0, 280, 0, 420)
-Main.Position = UDim2.new(0.5, -140, 0.5, -210)
+Main.Size = UDim2.new(0, 280, 0, 470)
+Main.Position = UDim2.new(0.5, -140, 0.5, -235)
 Main.BackgroundColor3 = Theme.Bg
 Main.BorderSizePixel = 0
 Main.Active = true
@@ -267,7 +273,7 @@ Scroll.Size = UDim2.new(1, -18, 1, -80)
 Scroll.Position = UDim2.new(0, 9, 0, 56)
 Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 700)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 800)
 Scroll.ScrollBarThickness = 3
 Scroll.ScrollBarImageColor3 = Theme.Accent
 
@@ -587,6 +593,14 @@ addToggle("glow character", function() return FogConfig.GlowCharacter end, funct
     FogConfig.GlowCharacter = v
     apply_fog()
 end)
+addSlider("glow brightness", 1, 10, function() return FogConfig.GlowBrightness end, function(v)
+    FogConfig.GlowBrightness = v
+    apply_fog()
+end, 0)
+addSlider("glow range", 5, 60, function() return FogConfig.GlowRange end, function(v)
+    FogConfig.GlowRange = v
+    apply_fog()
+end, 0)
 
 addSection("color (box)")
 add2DColorPicker()
@@ -636,7 +650,7 @@ minBtn.MouseButton1Click:Connect(function()
         minBtn.Text = "+"
     else
         Scroll.Visible = true
-        Main.Size = UDim2.new(0, 280, 0, 420)
+        Main.Size = UDim2.new(0, 280, 0, 470)
         minBtn.Text = "−"
     end
 end)
@@ -659,11 +673,14 @@ task.spawn(function()
     while task.wait(1) do
         if FogConfig.Enabled and FogConfig.GlowCharacter then
             local char = LocalPlayer.Character
-            if char and (not characterHighlight or characterHighlight.Parent ~= char) then
-                update_character_glow()
+            if char then
+                local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
+                if torso and (not glowLight or glowLight.Parent ~= torso) then
+                    update_character_glow()
+                end
             end
         end
     end
 end)
 
-print("🍮 livyii . fog loaded") 
+print("🍮 livyii . fog loaded")
